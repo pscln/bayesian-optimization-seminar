@@ -6,29 +6,23 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import Matern, RBF
 from scipy.stats import norm
 
-# -- Global Settings --
 st.set_page_config(layout="wide")
 N_ITER = 8
 N_INITIAL_SAMPLES = 2
 
-# -----------------------------
-# 1) Objective Functions
-# -----------------------------
+
 def objective_function(x):
-    """Simple 1D objective function."""
     return np.sin(3 * x) + 0.5 * np.cos(5 * x) - 0.3 * x
 
+
 def f(x):
-    """Rauhe Funktion: schnell oszillierend mit Rauschen."""
     np.random.seed(42)
     return np.sin(3 * x) + 0.5 * np.sin(7 * x) + 0.2 * np.random.randn(*x.shape)
 
-# -- Search Bounds --
+
 BOUNDS = np.array([[-1, 2]])
 
-# -----------------------------
-# 2) Kernel Selection
-# -----------------------------
+
 def get_kernel(name, **params):
     if name == "Matern":
         length_scale = params.get("length_scale", 0.5)
@@ -40,6 +34,7 @@ def get_kernel(name, **params):
     else:
         return Matern(length_scale=params.get("length_scale", 0.5), nu=params.get("nu", 2.5))
 
+
 def get_default_kernel(name):
     if name == "Matern":
         return Matern(length_scale=0.5, nu=2.5)
@@ -48,9 +43,7 @@ def get_default_kernel(name):
     else:
         return Matern(length_scale=0.5, nu=2.5)
 
-# -----------------------------
-# 3) Acquisition Functions
-# -----------------------------
+
 def expected_improvement(X, gp, y_max, xi=0.01):
     mu, sigma = gp.predict(X, return_std=True)
     sigma = np.maximum(sigma, 1e-9)
@@ -60,6 +53,7 @@ def expected_improvement(X, gp, y_max, xi=0.01):
     ei[sigma < 1e-9] = 0.0
     return ei
 
+
 def probability_of_improvement(X, gp, y_max, xi=0.01):
     """Berechnet die Probability of Improvement (PI)."""
     mu, sigma = gp.predict(X, return_std=True)
@@ -67,6 +61,7 @@ def probability_of_improvement(X, gp, y_max, xi=0.01):
     Z = (mu - y_max - xi) / sigma
     pi = norm.cdf(Z)
     return pi
+
 
 def knowledge_gradient(X, gp, X_sample, num_mc_samples=50):
     y_sample = gp.predict(X_sample)
@@ -81,17 +76,20 @@ def knowledge_gradient(X, gp, X_sample, num_mc_samples=50):
         kg_vals[i] = np.mean(improvement)
     return kg_vals
 
+
 def entropy_search(X, gp):
     _, sigma = gp.predict(X, return_std=True)
     sigma = np.maximum(sigma, 1e-9)
     es_vals = 0.5 * np.log(2 * np.pi * np.e * sigma ** 2)
     return es_vals
 
+
 def predictive_entropy_search(X, gp, num_representer_points=100):
     _, sigma = gp.predict(X, return_std=True)
     sigma = np.maximum(sigma, 1e-9)
     pes_vals = 0.5 * np.log(2 * np.pi * np.e * sigma ** 2)
     return pes_vals
+
 
 def acquisition_function(X, gp, X_sample, method="ei", acq_params=None):
     acq_params = acq_params or {}
@@ -116,9 +114,7 @@ def acquisition_function(X, gp, X_sample, method="ei", acq_params=None):
     else:
         return np.zeros(X.shape[0])
 
-# -----------------------------
-# 4) Full BO Loop storing History
-# -----------------------------
+
 def run_bayes_opt(acq_method, kernel_choice, kernel_params, n_iter=5, xi=0.01, acq_params=None):
     kernel = get_kernel(kernel_choice, **kernel_params)
     gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10)
@@ -148,16 +144,8 @@ def run_bayes_opt(acq_method, kernel_choice, kernel_params, n_iter=5, xi=0.01, a
         Y_sample = np.append(Y_sample, Y_next)
     return history
 
-# -----------------------------
-# 5) Variante 1: Vergleich von EI, PI und KG
-# -----------------------------
+
 def plot_variante_1(kernel_choice, kernel_params):
-    """
-    Zeigt ein 2x3 Gitter:
-      - Obere Reihe: GP-Fit (wahre Funktion, GP-Mittelwert, Vertrauensintervalle) inkl. der bisherigen Beobachtungen.
-      - Untere Reihe: dazugehörige Akquisitionsfunktionen.
-    Es werden die Funktionen EI, PI und KG verglichen.
-    """
     iteration_to_show = st.sidebar.slider("Iteration to show", 0, N_ITER - 1, N_ITER - 1)
     af_methods = ["ei", "pi", "kg"]
     n_af = len(af_methods)
@@ -170,7 +158,7 @@ def plot_variante_1(kernel_choice, kernel_params):
             kernel_params=kernel_params,
             n_iter=N_ITER,
             xi=0.01,
-            acq_params=None  # Standardparameter werden genutzt
+            acq_params=None
         )
         data = history[iteration_to_show]
         ax_gp = axes[0, idx]
@@ -203,6 +191,7 @@ def plot_variante_1(kernel_choice, kernel_params):
     fig.tight_layout()
     st.pyplot(fig)
 
+
 def main_variante_1():
     st.title("View 1: Compare EI, PI, and KG Acquisition Functions")
     kernel_choice = st.sidebar.selectbox("Choose kernel", ["RBF", "Matern"], index=0)
@@ -216,9 +205,7 @@ def main_variante_1():
 
     plot_variante_1(kernel_choice, kernel_params)
 
-# -----------------------------
-# 6) Variante 2: Vergleich von zwei Kerneln für eine ausgewählte Akquisitionsfunktion
-# -----------------------------
+
 def run_bayes_opt_for_kernel(kernel_name, acq_method, n_iter=5, acq_params=None):
     kernel = get_default_kernel(kernel_name)
     gp = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10)
@@ -248,12 +235,8 @@ def run_bayes_opt_for_kernel(kernel_name, acq_method, n_iter=5, acq_params=None)
         Y_sample = np.append(Y_sample, Y_next)
     return history
 
+
 def plot_variante_2(acq_method, acq_params):
-    """
-    Zeigt ein 2x2 Gitter:
-      - Links: Matern-Kernel
-      - Rechts: RBF-Kernel
-    """
     iteration_to_show = st.sidebar.slider("Iteration to show", 0, N_ITER - 1, N_ITER - 1)
     kernels = ["Matern", "RBF"]
     fig, axes = plt.subplots(2, 2, figsize=(12, 8), sharex='col')
@@ -291,6 +274,7 @@ def plot_variante_2(acq_method, acq_params):
     fig.tight_layout()
     st.pyplot(fig)
 
+
 def main_variante_2():
     st.title("View 2: Compare Kernel Functions")
     acq_method = st.sidebar.selectbox("Choose acquisition function", ["ei", "pi", "kg", "es", "pes"], index=0)
@@ -304,9 +288,7 @@ def main_variante_2():
 
     plot_variante_2(acq_method, acq_params)
 
-# -------------------------------------------------------------------------
-# Streamlit App mit zwei Tabs: Variante 1 und Variante 2
-# -------------------------------------------------------------------------
+
 def main():
     st.sidebar.title("Navigation")
     obj_choice = st.sidebar.selectbox("Choose objective function", ["Simple function", "Rough function"], index=0)
@@ -319,6 +301,7 @@ def main():
         main_variante_1()
     else:
         main_variante_2()
+
 
 if __name__ == "__main__":
     main()
